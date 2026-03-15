@@ -7,14 +7,16 @@
     "schema": "src/prisma/schema.prisma"
   },
   "scripts": {
-    "dev":          "nodemon",
-    "start":        "node src/index.js",
-    "db:migrate":   "npx prisma migrate dev --schema=src/prisma/schema.prisma",
-    "db:push":      "npx prisma db push --schema=src/prisma/schema.prisma",
-    "db:seed":      "node src/prisma/seed.js",
-    "db:studio":    "npx prisma studio --schema=src/prisma/schema.prisma",
-    "db:generate":  "npx prisma generate --schema=src/prisma/schema.prisma",
-    "db:reset":     "npx prisma migrate reset --schema=src/prisma/schema.prisma"
+    "dev":         "nodemon",
+    "start":       "node src/index.js",
+    "postinstall": "prisma generate --schema=src/prisma/schema.prisma",
+    "build":       "prisma generate --schema=src/prisma/schema.prisma && prisma db push --schema=src/prisma/schema.prisma && node src/prisma/seed.js",
+    "db:migrate":  "npx prisma migrate dev --schema=src/prisma/schema.prisma",
+    "db:push":     "npx prisma db push --schema=src/prisma/schema.prisma",
+    "db:seed":     "node src/prisma/seed.js",
+    "db:studio":   "npx prisma studio --schema=src/prisma/schema.prisma",
+    "db:generate": "npx prisma generate --schema=src/prisma/schema.prisma",
+    "db:reset":    "npx prisma migrate reset --schema=src/prisma/schema.prisma"
   },
   "dependencies": {
     "@prisma/client": "^5.10.0",
