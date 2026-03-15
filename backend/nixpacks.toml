@@ -1,0 +1,15 @@
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[phases.install]
+cmds = ["npm install"]
+
+[phases.build]
+cmds = [
+  "npx prisma generate --schema=src/prisma/schema.prisma",
+  "npx prisma db push --schema=src/prisma/schema.prisma",
+  "node src/prisma/seed.js"
+]
+
+[start]
+cmd = "node src/index.js"
