@@ -1,0 +1,274 @@
+// Happiness Program Platform — Database Schema
+// Run: npx prisma migrate dev --name init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── TEACHERS ───────────────────────────────────────────────────────────────
+model Teacher {
+  id          String   @id @default(uuid())
+  name        String
+  code        String   @unique   // alphanumeric login code
+  email       String?  @unique
+  city        String?
+  phone       String?
+  waNumber    String?            // WhatsApp number for sending
+  orgLink     String?            // org registration link
+  smtpConfig  Json?              // encrypted SMTP settings
+  isActive    Boolean  @default(true)
+  role        Role     @default(TEACHER)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  leads       Lead[]
+  courses     Course[]
+  campaigns   Campaign[]
+  templates   MessageTemplate[]
+  reminders   Reminder[]
+  posters     Poster[]
+  sessions    Session[]
+
+  @@index([code])
+}
+
+enum Role {
+  TEACHER
+  ADMIN
+}
+
+// ─── SESSIONS ────────────────────────────────────────────────────────────────
+model Session {
+  id         String   @id @default(uuid())
+  teacherId  String
+  token      String   @unique
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  teacher    Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  @@index([token])
+}
+
+// ─── LEADS ───────────────────────────────────────────────────────────────────
+model Lead {
+  id         String       @id @default(uuid())
+  teacherId  String
+  courseId   String?
+
+  // Contact info
+  name       String
+  phone      String?
+  email      String?
+  city       String?
+
+  // Classification
+  source     LeadSource   @default(WHATSAPP)
+  interest   InterestLevel @default(WARM)
+  status     LeadStatus   @default(NEW)
+
+  // Meta
+  notes      String?
+  importedAt DateTime?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  // Relations
+  teacher    Teacher      @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  course     Course?      @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  messages   MessageLog[]
+
+  @@index([teacherId])
+  @@index([courseId])
+  @@index([phone])
+  @@index([email])
+}
+
+enum LeadSource {
+  INSTAGRAM
+  WHATSAPP
+  GOOGLE_FORM
+  REFERRAL
+  OFFLINE
+  IMPORT
+  WEBSITE
+}
+
+enum InterestLevel {
+  HOT
+  WARM
+  COLD
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  REGISTERED
+  COMPLETED
+  DROPPED
+}
+
+// ─── COURSES ─────────────────────────────────────────────────────────────────
+model Course {
+  id          String   @id @default(uuid())
+  teacherId   String
+  city        String
+  venue       String?
+  courseDate  DateTime
+  seats       Int      @default(25)
+  isActive    Boolean  @default(true)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  teacher     Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  leads       Lead[]
+  campaigns   Campaign[]
+
+  @@index([teacherId])
+  @@index([courseDate])
+}
+
+// ─── MESSAGE TEMPLATES ───────────────────────────────────────────────────────
+model MessageTemplate {
+  id          String          @id @default(uuid())
+  teacherId   String?         // NULL = shared/global template
+  title       String
+  channel     MessageChannel
+  subject     String?         // for email
+  body        String          // supports {Name} {City} {CourseDate} {TeacherName} {OrgLink}
+  category    TemplateCategory @default(NURTURE)
+  isShared    Boolean         @default(false)  // visible to all teachers
+  isActive    Boolean         @default(true)
+  sortOrder   Int             @default(0)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  teacher     Teacher?        @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  campaigns   Campaign[]
+
+  @@index([teacherId])
+  @@index([isShared])
+}
+
+enum MessageChannel {
+  WHATSAPP
+  EMAIL
+  BOTH
+}
+
+enum TemplateCategory {
+  NURTURE
+  REMINDER
+  POST_COURSE
+  TESTIMONIAL
+  ANNOUNCEMENT
+}
+
+// ─── CAMPAIGNS ───────────────────────────────────────────────────────────────
+model Campaign {
+  id            String         @id @default(uuid())
+  teacherId     String
+  courseId      String?
+  templateId    String
+  name          String
+  channel       MessageChannel
+  status        CampaignStatus @default(DRAFT)
+  scheduledAt   DateTime?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  totalLeads    Int            @default(0)
+  sentCount     Int            @default(0)
+  failedCount   Int            @default(0)
+  delayMs       Int            @default(3000)  // delay between messages
+  filterStatus  String?        // JSON: lead status filter
+  filterInterest String?       // JSON: interest filter
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  teacher       Teacher        @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  course        Course?        @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  template      MessageTemplate @relation(fields: [templateId], references: [id])
+  logs          MessageLog[]
+
+  @@index([teacherId])
+  @@index([status])
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  RUNNING
+  PAUSED
+  COMPLETED
+  FAILED
+}
+
+// ─── MESSAGE LOGS ────────────────────────────────────────────────────────────
+model MessageLog {
+  id          String       @id @default(uuid())
+  campaignId  String
+  leadId      String
+  channel     MessageChannel
+  status      SendStatus   @default(PENDING)
+  sentAt      DateTime?
+  errorMsg    String?
+  messageBody String?
+  createdAt   DateTime     @default(now())
+
+  campaign    Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  lead        Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([leadId])
+}
+
+enum SendStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+// ─── REMINDERS ───────────────────────────────────────────────────────────────
+model Reminder {
+  id          String   @id @default(uuid())
+  teacherId   String
+  time        String   // HH:MM
+  frequency   ReminderFreq @default(DAILY)
+  text        String
+  isActive    Boolean  @default(true)
+  lastRun     DateTime?
+  createdAt   DateTime @default(now())
+
+  teacher     Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+}
+
+enum ReminderFreq {
+  DAILY
+  WEEKLY
+  ONCE
+}
+
+// ─── POSTERS ─────────────────────────────────────────────────────────────────
+model Poster {
+  id          String   @id @default(uuid())
+  teacherId   String
+  templateKey String   // which poster template design
+  title       String
+  city        String?
+  courseDate  String?
+  teacherName String?
+  canvaUrl    String?  // link to canva design
+  exportUrl   String?  // exported image URL
+  data        Json?    // all custom text overrides
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  teacher     Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+}
